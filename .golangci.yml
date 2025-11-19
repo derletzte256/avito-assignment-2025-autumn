@@ -1,0 +1,43 @@
+# .golangci.yml
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  relative-path-mode: gomod
+
+linters:
+  # Use the standard default set, then explicitly ensure a few core ones.
+  default: standard
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - revive
+  settings:
+    govet:
+      enable:
+        - shadow
+    revive:
+      severity: warning
+
+formatters:
+  # v2: formatters live here, not in linters.enable
+  enable:
+    - goimports
+  settings:
+    goimports:
+      # Replace with your module path(s)
+      local-prefixes:
+        - your/module/path
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  show-linter-name: true
+
+severity:
+  default: error
