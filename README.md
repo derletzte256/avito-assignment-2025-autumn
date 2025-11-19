@@ -1,0 +1,1 @@
+# avito-assignment-2025-autumn
