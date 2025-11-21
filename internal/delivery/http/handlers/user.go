@@ -1,96 +1,101 @@
 package handlers
 
 import (
-	"avito-assignment-2025-autumn/internal/delivery/http/dto"
 	"avito-assignment-2025-autumn/internal/entity"
+	"avito-assignment-2025-autumn/pkg/httputil"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type UserUseCase interface {
-	SetIsActive(ctx context.Context, userID string, isActive bool) (*entity.User, error)
-	GetReviewList(ctx context.Context, userID string) ([]*entity.PullRequest, error)
+	SetIsActive(ctx context.Context, req *entity.SetUserActiveRequest) (*entity.User, error)
+	GetReviewList(ctx context.Context, userID string) (*entity.UserReviewListResponse, error)
 }
 
 type UserDelivery struct {
-	uc UserUseCase
+	uc     UserUseCase
+	logger *zap.Logger
 }
 
-func NewUserDelivery(uc UserUseCase) *UserDelivery {
-	return &UserDelivery{uc: uc}
+func NewUserDelivery(uc UserUseCase, logger *zap.Logger) *UserDelivery {
+	return &UserDelivery{uc: uc, logger: logger}
 }
 
-func (d *UserDelivery) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/users/setIsActive", d.SetIsActive).Methods(http.MethodPost)
-	r.HandleFunc("/users/getReview", d.GetReviewList).Methods(http.MethodGet)
+func (u *UserDelivery) RegisterRoutes(r *mux.Router) {
+	r.HandleFunc("/setIsActive", u.SetIsActive).Methods("POST")
+	r.HandleFunc("/getReview", u.GetReviewList).Methods("GET")
 }
 
-func (d *UserDelivery) SetIsActive(w http.ResponseWriter, r *http.Request) {
+func (u *UserDelivery) SetIsActive(w http.ResponseWriter, r *http.Request) {
+	var in entity.SetUserActiveRequest
 	ctx := r.Context()
 
-	var in dto.SetUserActiveRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	if err := httputil.ReadJSON(r, &in); err != nil {
+		u.logger.Warn("failed to read request", zap.Error(err))
+		if httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "invalid JSON body") != nil {
+			u.logger.Warn("failed to write error", zap.Error(err))
+			return
+		}
 		return
 	}
 
-	if in.UserID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
-		return
-	}
-
-	user, err := d.uc.SetIsActive(ctx, in.UserID, in.IsActive)
+	updatedUser, err := u.uc.SetIsActive(ctx, &in)
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
-			if writeErr := writeAPIError(w, http.StatusNotFound, dto.ErrorCodeNotFound, "user not found"); writeErr != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+			u.logger.Warn("failed to find user", zap.Error(err))
+			if writeErr := httputil.WriteAPIError(w, http.StatusNotFound, entity.ErrorCodeNotFound, "resource not found"); writeErr != nil {
+				u.logger.Warn("failed to write error", zap.Error(writeErr))
+				return
 			}
 			return
 		}
 
-		writeInternalServerError(w, err)
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 
-	resp := dto.SetUserActiveResponse{User: entityUserToDTO(user)}
-	if err := writeJSON(w, http.StatusOK, resp); err != nil {
-		writeInternalServerError(w, err)
+	var resp entity.SetUserActiveResponse
+	resp.User = updatedUser
+
+	if err := httputil.WriteJSON(w, http.StatusOK, resp); err != nil {
+		u.logger.Warn("failed to write response", zap.Error(err))
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 }
 
-func (d *UserDelivery) GetReviewList(w http.ResponseWriter, r *http.Request) {
+func (u *UserDelivery) GetReviewList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
+		if err := httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "missing user_id parameter"); err != nil {
+			u.logger.Warn("failed to write error", zap.Error(err))
+			return
+		}
 		return
 	}
 
-	pullRequests, err := d.uc.GetReviewList(ctx, userID)
+	reviewList, err := u.uc.GetReviewList(ctx, userID)
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
-			if writeErr := writeAPIError(w, http.StatusNotFound, dto.ErrorCodeNotFound, "user not found"); writeErr != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+			if writeErr := httputil.WriteAPIError(w, http.StatusNotFound, entity.ErrorCodeNotFound, "user_id not found"); writeErr != nil {
+				u.logger.Warn("failed to write error", zap.Error(writeErr))
+				return
 			}
 			return
 		}
-
-		writeInternalServerError(w, err)
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 
-	resp := dto.UserReviewListResponse{
-		UserID:       userID,
-		PullRequests: entityPullRequestsToShortDTOs(pullRequests),
-	}
-
-	if err := writeJSON(w, http.StatusOK, resp); err != nil {
-		writeInternalServerError(w, err)
+	if err := httputil.WriteJSON(w, http.StatusOK, reviewList); err != nil {
+		u.logger.Warn("failed to write response", zap.Error(err))
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
+
 }

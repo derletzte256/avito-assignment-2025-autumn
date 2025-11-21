@@ -2,20 +2,19 @@ package http
 
 import (
 	"avito-assignment-2025-autumn/internal/config"
-	"avito-assignment-2025-autumn/internal/delivery/http/handlers"
 	"context"
 	"errors"
 	nethttp "net/http"
 
-	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type Server struct {
 	httpServer *nethttp.Server
+	logger     *zap.Logger
 }
 
-func NewServer(httpCfg config.HTTPConfig, team *handlers.TeamDelivery, user *handlers.UserDelivery, pr *handlers.PullRequestDelivery, middlewares ...mux.MiddlewareFunc) *Server {
-	handler := NewRouter(team, user, pr, middlewares...)
+func NewServer(httpCfg config.HTTPConfig, handler nethttp.Handler, logger *zap.Logger) *Server {
 
 	srv := &nethttp.Server{
 		Addr:         httpCfg.Address,
@@ -25,7 +24,7 @@ func NewServer(httpCfg config.HTTPConfig, team *handlers.TeamDelivery, user *han
 		IdleTimeout:  httpCfg.IdleTimeout,
 	}
 
-	return &Server{httpServer: srv}
+	return &Server{httpServer: srv, logger: logger}
 }
 
 func (s *Server) Start() error {

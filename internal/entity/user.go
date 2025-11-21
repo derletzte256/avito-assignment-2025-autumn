@@ -1,9 +1,8 @@
 package entity
 
 type User struct {
-	ID       string
-	Username string
-	IsActive bool
-	TeamID   int64
-	TeamName string
+	ID       string `json:"user_id"`
+	Username string `json:"username"`
+	IsActive bool   `json:"is_active"`
+	TeamName string `json:"team_name,omitempty"`
 }

@@ -1,14 +1,14 @@
 package handlers
 
 import (
-	"avito-assignment-2025-autumn/internal/delivery/http/dto"
 	"avito-assignment-2025-autumn/internal/entity"
+	"avito-assignment-2025-autumn/pkg/httputil"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type TeamUseCase interface {
@@ -17,44 +17,51 @@ type TeamUseCase interface {
 }
 
 type TeamDelivery struct {
-	uc TeamUseCase
+	uc     TeamUseCase
+	logger *zap.Logger
 }
 
-func NewTeamDelivery(uc TeamUseCase) *TeamDelivery {
-	return &TeamDelivery{uc: uc}
+func NewTeamDelivery(uc TeamUseCase, logger *zap.Logger) *TeamDelivery {
+	return &TeamDelivery{uc: uc, logger: logger}
 }
 
 func (t *TeamDelivery) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/team/add", t.CreateTeam).Methods(http.MethodPost)
-	r.HandleFunc("/team/get", t.GetTeam).Methods(http.MethodGet)
+	r.HandleFunc("/add", t.CreateTeam).Methods(http.MethodPost)
+	r.HandleFunc("/get", t.GetTeam).Methods(http.MethodGet)
 }
 
 func (t *TeamDelivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
-	var in dto.CreateTeamRequest
+	var in entity.CreateTeamRequest
 	ctx := r.Context()
 
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	if err := httputil.ReadJSON(r, &in); err != nil {
+		t.logger.Warn("failed to read request", zap.Error(err))
+		if httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "invalid JSON body") != nil {
+			t.logger.Warn("failed to read request", zap.Error(err))
+			return
+		}
 		return
 	}
 
-	team := dtoTeamToEntity(in)
+	team := &in
 
 	if err := t.uc.CreateTeam(ctx, team); err != nil {
 		if errors.Is(err, entity.ErrAlreadyExists) {
-			if writeErr := writeAPIError(w, http.StatusBadRequest, dto.ErrorCodeTeamExists, "team already exists"); writeErr != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+			if writeErr := httputil.WriteAPIError(w, http.StatusConflict, entity.ErrorCodeTeamExists, "team_name already exists"); writeErr != nil {
+				t.logger.Warn("failed to write error", zap.Error(writeErr))
+				return
 			}
 			return
 		}
 
-		writeInternalServerError(w, err)
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 
-	resp := dto.CreateTeamResponse{Team: entityTeamToDTO(team)}
-	if err := writeJSON(w, http.StatusCreated, resp); err != nil {
-		writeInternalServerError(w, err)
+	resp := entity.CreateTeamResponse{Team: team}
+	if err := httputil.WriteJSON(w, http.StatusCreated, resp); err != nil {
+		t.logger.Warn("failed to write response", zap.Error(err))
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 
@@ -64,25 +71,30 @@ func (t *TeamDelivery) GetTeam(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	teamName := r.URL.Query().Get("team_name")
 	if teamName == "" {
-		http.Error(w, "team_name is required", http.StatusBadRequest)
+		if writeErr := httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "team_name is required"); writeErr != nil {
+			t.logger.Warn("failed to write error", zap.Error(writeErr))
+			return
+		}
 		return
 	}
 
 	team, err := t.uc.GetByName(ctx, teamName)
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
-			if writeErr := writeAPIError(w, http.StatusNotFound, dto.ErrorCodeNotFound, "team not found"); writeErr != nil {
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+			if writeErr := httputil.WriteAPIError(w, http.StatusNotFound, entity.ErrorCodeNotFound, "team not found"); writeErr != nil {
+				t.logger.Warn("failed to write error", zap.Error(writeErr))
+				return
 			}
 			return
 		}
 
-		writeInternalServerError(w, err)
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, entityTeamToDTO(team)); err != nil {
-		writeInternalServerError(w, err)
+	if err := httputil.WriteJSON(w, http.StatusOK, team); err != nil {
+		t.logger.Warn("failed to write response", zap.Error(err))
+		httputil.WriteInternalServerError(w, err)
 		return
 	}
 }

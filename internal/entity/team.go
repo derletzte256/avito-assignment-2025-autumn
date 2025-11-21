@@ -1,7 +1,6 @@
 package entity
 
 type Team struct {
-	ID      int64
-	Name    string
-	Members []*User
+	Name    string  `json:"team_name"`
+	Members []*User `json:"members"`
 }

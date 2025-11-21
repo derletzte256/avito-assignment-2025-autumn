@@ -1,18 +1,17 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE team (
-    id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    name TEXT NOT NULL CONSTRAINT team_name_unique UNIQUE
+	name TEXT PRIMARY KEY
 );
 
 CREATE TABLE "user" (
-    id TEXT PRIMARY KEY,
-    username TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    team_id BIGINT NOT NULL REFERENCES team(id) ON DELETE CASCADE
+	id TEXT PRIMARY KEY,
+	username TEXT NOT NULL,
+	is_active BOOLEAN NOT NULL DEFAULT TRUE,
+	team_name TEXT NOT NULL REFERENCES team(name) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_users_team_active ON "user"(team_id, is_active);
+CREATE INDEX idx_users_team_active ON "user"(team_name, is_active);
 
 CREATE TABLE pull_request_status (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -33,8 +32,7 @@ CREATE TABLE pull_request (
 CREATE TABLE reviewer (
     pull_request_id TEXT NOT NULL REFERENCES pull_request(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (pull_request_id, user_id)
 );
 -- +goose StatementEnd
