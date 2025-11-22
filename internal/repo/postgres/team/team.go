@@ -1,12 +1,14 @@
-package postgres
+package team
 
 import (
 	"avito-assignment-2025-autumn/internal/entity"
 	"context"
-	"database/sql"
 	"errors"
 
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -28,22 +30,22 @@ const (
 		`
 )
 
-type TeamRepo struct {
+type Repo struct {
 	db     *pgxpool.Pool
 	getter *trmpgx.CtxGetter
 	logger *zap.Logger
 }
 
-func NewTeamRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter, logger *zap.Logger) *TeamRepo {
-	return &TeamRepo{db: db, getter: getter, logger: logger}
+func NewTeamRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter, logger *zap.Logger) *Repo {
+	return &Repo{db: db, getter: getter, logger: logger}
 }
 
-func (r *TeamRepo) CheckTeamNameExists(ctx context.Context, name string) (bool, error) {
+func (r *Repo) CheckTeamNameExists(ctx context.Context, name string) (bool, error) {
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 	var exists int
 	err := conn.QueryRow(ctx, checkTeamNameExistsQuery, name).Scan(&exists)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
 		return false, err
@@ -51,20 +53,26 @@ func (r *TeamRepo) CheckTeamNameExists(ctx context.Context, name string) (bool, 
 	return true, nil
 }
 
-func (r *TeamRepo) Create(ctx context.Context, team *entity.Team) error {
+func (r *Repo) Create(ctx context.Context, team *entity.Team) error {
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
 	_, err := conn.Exec(ctx, createTeamQuery, team.Name)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		if pgErr.Code == pgerrcode.UniqueViolation {
+			return entity.ErrAlreadyExists
+		}
+	}
 	return err
 }
 
-func (r *TeamRepo) GetByName(ctx context.Context, name string) (*entity.Team, error) {
+func (r *Repo) GetByName(ctx context.Context, name string) (*entity.Team, error) {
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
 	team := &entity.Team{}
 	err := conn.QueryRow(ctx, getTeamByNameQuery, name).Scan(&team.Name)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrNotFound
 		}
 		return nil, err

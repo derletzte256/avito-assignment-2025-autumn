@@ -1,9 +1,15 @@
 package http
 
 import (
-	"avito-assignment-2025-autumn/internal/delivery/http/handlers"
-	"avito-assignment-2025-autumn/internal/repo/postgres"
-	"avito-assignment-2025-autumn/internal/usecase"
+	prdelivery "avito-assignment-2025-autumn/internal/delivery/http/handlers/pullRequest"
+	teamdelivery "avito-assignment-2025-autumn/internal/delivery/http/handlers/team"
+	userdelivery "avito-assignment-2025-autumn/internal/delivery/http/handlers/user"
+	prrepo "avito-assignment-2025-autumn/internal/repo/postgres/pullRequest"
+	teamrepo "avito-assignment-2025-autumn/internal/repo/postgres/team"
+	userrepo "avito-assignment-2025-autumn/internal/repo/postgres/user"
+	prusecase "avito-assignment-2025-autumn/internal/usecase/pullRequest"
+	teamusecase "avito-assignment-2025-autumn/internal/usecase/team"
+	userusecase "avito-assignment-2025-autumn/internal/usecase/user"
 	"net/http"
 
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
@@ -16,18 +22,18 @@ import (
 func NewRouter(pool *pgxpool.Pool, trManager *manager.Manager, logger *zap.Logger) http.Handler {
 	r := mux.NewRouter()
 
-	teamRepo := postgres.NewTeamRepo(pool, trmpgx.DefaultCtxGetter, logger)
-	userRepo := postgres.NewUserRepo(pool, trmpgx.DefaultCtxGetter, logger)
-	pullRequestRepo := postgres.NewPullRequestRepo(pool, trmpgx.DefaultCtxGetter, logger)
+	teamRepo := teamrepo.NewTeamRepo(pool, trmpgx.DefaultCtxGetter, logger)
+	userRepo := userrepo.NewUserRepo(pool, trmpgx.DefaultCtxGetter, logger)
+	pullRequestRepo := prrepo.NewRepo(pool, trmpgx.DefaultCtxGetter, logger)
 
-	teamUC := usecase.NewTeamUseCase(teamRepo, userRepo, trManager, logger)
-	teamDelivery := handlers.NewTeamDelivery(teamUC, logger)
+	teamUC := teamusecase.NewUseCase(teamRepo, userRepo, trManager, logger)
+	teamDelivery := teamdelivery.NewTeamDelivery(teamUC, logger)
 
-	userUC := usecase.NewUserUseCase(userRepo, pullRequestRepo, trManager, logger)
-	userDelivery := handlers.NewUserDelivery(userUC, logger)
+	userUC := userusecase.NewUseCase(userRepo, pullRequestRepo, teamRepo, trManager, logger)
+	userDelivery := userdelivery.NewUserDelivery(userUC, logger)
 
-	pullRequestUC := usecase.NewPullRequestUseCase(pullRequestRepo, userRepo, teamRepo, trManager, logger)
-	pullRequestDelivery := handlers.NewPullRequestDelivery(pullRequestUC, logger)
+	pullRequestUC := prusecase.NewUseCase(pullRequestRepo, userRepo, teamRepo, trManager, logger)
+	pullRequestDelivery := prdelivery.NewPullRequestDelivery(pullRequestUC, logger)
 
 	teamSubrouter := r.PathPrefix("/team").Subrouter()
 	userSubrouter := r.PathPrefix("/users").Subrouter()

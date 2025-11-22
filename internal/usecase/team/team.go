@@ -1,22 +1,23 @@
-package usecase
+package team
 
 import (
 	"avito-assignment-2025-autumn/internal/entity"
+	"avito-assignment-2025-autumn/internal/usecase"
 	"context"
 
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
 	"go.uber.org/zap"
 )
 
-type TeamUseCase struct {
-	teamRepo   TeamRepository
-	userRepo   UserRepository
+type UseCase struct {
+	teamRepo   usecase.TeamRepository
+	userRepo   usecase.UserRepository
 	transactor trm.Manager
 	logger     *zap.Logger
 }
 
-func NewTeamUseCase(teamRepo TeamRepository, userRepo UserRepository, transactor trm.Manager, logger *zap.Logger) *TeamUseCase {
-	return &TeamUseCase{
+func NewUseCase(teamRepo usecase.TeamRepository, userRepo usecase.UserRepository, transactor trm.Manager, logger *zap.Logger) *UseCase {
+	return &UseCase{
 		teamRepo:   teamRepo,
 		userRepo:   userRepo,
 		transactor: transactor,
@@ -24,7 +25,24 @@ func NewTeamUseCase(teamRepo TeamRepository, userRepo UserRepository, transactor
 	}
 }
 
-func (uc *TeamUseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
+func checkMemberIDsUnique(members []*entity.Member) bool {
+	idsMap := make(map[string]struct{})
+	for _, member := range members {
+		if member != nil {
+			if _, exists := idsMap[member.ID]; exists {
+				return false
+			}
+			idsMap[member.ID] = struct{}{}
+		}
+	}
+	return true
+}
+
+func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
+	if !checkMemberIDsUnique(team.Members) {
+		return entity.ErrDuplicateUserIDs
+	}
+
 	err := uc.transactor.Do(ctx, func(ctx context.Context) error {
 		exists, err := uc.teamRepo.CheckTeamNameExists(ctx, team.Name)
 		if err != nil {
@@ -52,11 +70,10 @@ func (uc *TeamUseCase) CreateTeam(ctx context.Context, team *entity.Team) error 
 			return err
 		}
 
-		existingMembers := make([]*entity.User, 0)
-		newMembers := make([]*entity.User, 0)
+		existingMembers := make([]*entity.Member, 0)
+		newMembers := make([]*entity.Member, 0)
 		for _, member := range team.Members {
 			if member != nil {
-				member.TeamName = team.Name
 				if _, exists := existingIDs[member.ID]; exists {
 					existingMembers = append(existingMembers, member)
 				} else {
@@ -66,14 +83,14 @@ func (uc *TeamUseCase) CreateTeam(ctx context.Context, team *entity.Team) error 
 		}
 
 		if len(existingMembers) > 0 {
-			if err := uc.userRepo.UpdateUsers(ctx, existingMembers); err != nil {
+			if err := uc.userRepo.UpdateMembers(ctx, existingMembers, team.Name); err != nil {
 				uc.logger.Warn("failed to update existing users", zap.Error(err))
 				return err
 			}
 		}
 
 		if len(newMembers) > 0 {
-			if err := uc.userRepo.CreateBatch(ctx, newMembers); err != nil {
+			if err := uc.userRepo.CreateBatch(ctx, newMembers, team.Name); err != nil {
 				uc.logger.Warn("failed to create new users", zap.Error(err))
 				return err
 			}
@@ -88,7 +105,7 @@ func (uc *TeamUseCase) CreateTeam(ctx context.Context, team *entity.Team) error 
 	return nil
 }
 
-func (uc *TeamUseCase) GetByName(ctx context.Context, name string) (*entity.Team, error) {
+func (uc *UseCase) GetByName(ctx context.Context, name string) (*entity.Team, error) {
 	team, err := uc.teamRepo.GetByName(ctx, name)
 	if err != nil {
 		uc.logger.Warn("failed to get team", zap.Error(err))

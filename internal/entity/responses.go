@@ -46,6 +46,16 @@ type UserReviewListResponse struct {
 }
 
 type ReassignPullRequestResponse struct {
-	PullRequestResponse
+	*PullRequestResponse
 	ReplacedBy string `json:"replaced_by"`
+}
+
+type StatsByUsersResponse struct {
+	UsersStat map[string]*UserStatistics `json:"users_stat"`
+}
+
+type MassDeactivateUsersResponse struct {
+	TeamName            string                `json:"team_name"`
+	ReviewReassignments []*ReviewReassignment `json:"review_reassignments"`
+	UnreassignedReviews []*UnreassignedReview `json:"unreassigned_reviews"`
 }

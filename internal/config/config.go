@@ -1,28 +1,25 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
 type DatabaseConfig struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
-	Name     string
+	Host     string `mapstructure:"DATABASE_HOST"`
+	Port     int    `mapstructure:"DATABASE_PORT"`
+	Username string `mapstructure:"DATABASE_USER"`
+	Password string `mapstructure:"DATABASE_PASSWORD"`
+	Name     string `mapstructure:"DATABASE_NAME"`
 }
 
 type HTTPConfig struct {
-	Address      string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
+	Address      string        `mapstructure:"HTTP_ADDRESS"`
+	ReadTimeout  time.Duration `mapstructure:"HTTP_READ_TIMEOUT"`
+	WriteTimeout time.Duration `mapstructure:"HTTP_WRITE_TIMEOUT"`
+	IdleTimeout  time.Duration `mapstructure:"HTTP_IDLE_TIMEOUT"`
 }
 
 type Config struct {
@@ -30,107 +27,53 @@ type Config struct {
 	HTTP     HTTPConfig
 }
 
-const envFile = ".env"
-
 func LoadConfig() (*Config, error) {
-	if err := godotenv.Load(envFile); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("load %s: %w", envFile, err)
-	}
+	v := viper.New()
+	v.AutomaticEnv()
 
-	dbHost, err := getStringEnv("DATABASE_HOST")
-	if err != nil {
-		return nil, err
-	}
-
-	dbPort, err := getIntEnv("DATABASE_PORT")
-	if err != nil {
-		return nil, err
-	}
-
-	dbUser, err := getStringEnv("DATABASE_USER")
-	if err != nil {
-		return nil, err
-	}
-
-	dbPassword, err := getStringEnv("DATABASE_PASSWORD")
-	if err != nil {
-		return nil, err
-	}
-
-	dbName, err := getStringEnv("DATABASE_NAME")
-	if err != nil {
-		return nil, err
-	}
-
-	httpAddress, err := getStringEnv("HTTP_ADDRESS")
-	if err != nil {
-		return nil, err
-	}
-
-	readTimeout, err := getDurationEnv("HTTP_READ_TIMEOUT")
-	if err != nil {
-		return nil, err
-	}
-
-	writeTimeout, err := getDurationEnv("HTTP_WRITE_TIMEOUT")
-	if err != nil {
-		return nil, err
-	}
-
-	idleTimeout, err := getDurationEnv("HTTP_IDLE_TIMEOUT")
-	if err != nil {
-		return nil, err
-	}
-
-	return &Config{
+	cfg := &Config{
 		Database: DatabaseConfig{
-			Host:     dbHost,
-			Port:     dbPort,
-			Username: dbUser,
-			Password: dbPassword,
-			Name:     dbName,
+			Host:     v.GetString("DATABASE_HOST"),
+			Port:     v.GetInt("DATABASE_PORT"),
+			Username: v.GetString("DATABASE_USER"),
+			Password: v.GetString("DATABASE_PASSWORD"),
+			Name:     v.GetString("DATABASE_NAME"),
 		},
 		HTTP: HTTPConfig{
-			Address:      httpAddress,
-			ReadTimeout:  readTimeout,
-			WriteTimeout: writeTimeout,
-			IdleTimeout:  idleTimeout,
+			Address:      v.GetString("HTTP_ADDRESS"),
+			ReadTimeout:  v.GetDuration("HTTP_READ_TIMEOUT"),
+			WriteTimeout: v.GetDuration("HTTP_WRITE_TIMEOUT"),
+			IdleTimeout:  v.GetDuration("HTTP_IDLE_TIMEOUT"),
 		},
-	}, nil
-}
-
-func getStringEnv(key string) (string, error) {
-	value, ok := os.LookupEnv(key)
-	if !ok || value == "" {
-		return "", fmt.Errorf("environment variable %s is not set", key)
-	}
-	return value, nil
-}
-
-func getIntEnv(key string) (int, error) {
-	value, err := getStringEnv(key)
-	if err != nil {
-		return 0, err
 	}
 
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("parse %s=%q as int: %w", key, value, err)
+	if cfg.Database.Host == "" {
+		return nil, fmt.Errorf("DATABASE_HOST is required")
+	}
+	if cfg.Database.Port == 0 {
+		return nil, fmt.Errorf("DATABASE_PORT is required")
+	}
+	if cfg.Database.Username == "" {
+		return nil, fmt.Errorf("DATABASE_USER is required")
+	}
+	if cfg.Database.Password == "" {
+		return nil, fmt.Errorf("DATABASE_PASSWORD is required")
+	}
+	if cfg.Database.Name == "" {
+		return nil, fmt.Errorf("DATABASE_NAME is required")
+	}
+	if cfg.HTTP.Address == "" {
+		return nil, fmt.Errorf("HTTP_ADDRESS is required")
+	}
+	if cfg.HTTP.ReadTimeout == 0 {
+		return nil, fmt.Errorf("HTTP_READ_TIMEOUT is required")
+	}
+	if cfg.HTTP.WriteTimeout == 0 {
+		return nil, fmt.Errorf("HTTP_WRITE_TIMEOUT is required")
+	}
+	if cfg.HTTP.IdleTimeout == 0 {
+		return nil, fmt.Errorf("HTTP_IDLE_TIMEOUT is required")
 	}
 
-	return parsed, nil
-}
-
-func getDurationEnv(key string) (time.Duration, error) {
-	value, err := getStringEnv(key)
-	if err != nil {
-		return 0, err
-	}
-
-	dur, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, fmt.Errorf("parse %s=%q as duration: %w", key, value, err)
-	}
-
-	return dur, nil
+	return cfg, nil
 }
