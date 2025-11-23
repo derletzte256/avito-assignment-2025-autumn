@@ -1,4 +1,4 @@
-.PHONY: down up up-default setup format lint unit
+.PHONY: down up up-default setup format lint unit e2e
 
 setup:
 	go mod tidy
@@ -26,3 +26,8 @@ mocks:
 
 unit:
 	./scripts/coverage.sh
+
+e2e:
+	@echo "Running e2e tests"
+	docker-compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-tests e2e-tests
+	docker-compose -f docker-compose.e2e.yml down --volumes --remove-orphans;

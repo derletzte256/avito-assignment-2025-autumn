@@ -6,19 +6,18 @@ import (
 	"net/http"
 
 	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/httputil"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/httputil"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
 type UseCase interface {
-	SetIsActive(ctx context.Context, req *entity.SetUserActiveRequest) (*entity.User, error)
+	SetIsActive(ctx context.Context, userID string, isActive bool) (*entity.User, error)
 	GetReviewList(ctx context.Context, userID string) (*entity.UserReviewListResponse, error)
 	GetStatistics(ctx context.Context) (*entity.StatsByUsersResponse, error)
-	MassDeactivateUsers(ctx context.Context, req *entity.MassDeactivateUsersRequest) (*entity.MassDeactivateUsersResponse, error)
+	MassDeactivateUsers(ctx context.Context, in *entity.MassDeactivateUsersRequest) (*entity.MassDeactivateUsersResponse, error)
 }
 
 type Delivery struct {
@@ -67,7 +66,7 @@ func (d *Delivery) SetIsActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedUser, err := d.uc.SetIsActive(ctx, &in)
+	updatedUser, err := d.uc.SetIsActive(ctx, in.UserID, *in.IsActive)
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
 			l.Warn("failed to find user", zap.Error(err))

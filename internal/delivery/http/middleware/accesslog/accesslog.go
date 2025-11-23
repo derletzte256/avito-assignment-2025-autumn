@@ -6,8 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
 	"go.uber.org/zap"
@@ -38,7 +37,10 @@ func Middleware() mux.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			l := logger.Get()
 
-			requestID := xid.New().String()
+			requestID := r.Header.Get(string(requestIDContextKey))
+			if requestID == "" {
+				requestID = xid.New().String()
+			}
 
 			ctx := context.WithValue(
 				r.Context(),

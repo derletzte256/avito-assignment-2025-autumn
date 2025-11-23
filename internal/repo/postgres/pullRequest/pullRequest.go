@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

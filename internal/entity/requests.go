@@ -10,7 +10,7 @@ type CreatePullRequestRequest struct {
 
 type SetUserActiveRequest struct {
 	UserID   string `json:"user_id" validate:"required,min=1,max=64"`
-	IsActive bool   `json:"is_active" validate:"required"`
+	IsActive *bool  `json:"is_active" validate:"required"`
 }
 
 type MergePullRequestRequest struct {

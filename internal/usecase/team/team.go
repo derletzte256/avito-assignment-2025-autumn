@@ -3,11 +3,10 @@ package team
 import (
 	"context"
 
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
 	"go.uber.org/zap"
 )
 

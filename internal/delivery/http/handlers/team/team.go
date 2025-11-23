@@ -6,9 +6,8 @@ import (
 	"net/http"
 
 	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/httputil"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/httputil"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"

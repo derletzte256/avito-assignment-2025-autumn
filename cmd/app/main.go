@@ -9,14 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/config"
-	delivery "github.com/derletzte256/avito-assignment-2025-autumn/internal/delivery/http"
-	_ "github.com/derletzte256/avito-assignment-2025-autumn/migrations"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/database"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/avito-tech/go-transaction-manager/trm/v2/manager"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/config"
+	delivery "github.com/derletzte256/avito-assignment-2025-autumn/internal/delivery/http"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/database"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
+	_ "github.com/derletzte256/avito-assignment-2025-autumn/migrations"
 	"go.uber.org/zap"
 )
 

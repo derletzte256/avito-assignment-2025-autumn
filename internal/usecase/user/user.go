@@ -5,11 +5,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
-	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
-	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
-
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/pkg/logger"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
 	"go.uber.org/zap"
 )
 
@@ -29,9 +28,9 @@ func NewUseCase(userRepo usecase.UserRepository, pullRequestRepo usecase.PullReq
 	}
 }
 
-func (uc *UseCase) SetIsActive(ctx context.Context, req *entity.SetUserActiveRequest) (*entity.User, error) {
+func (uc *UseCase) SetIsActive(ctx context.Context, userID string, isActive bool) (*entity.User, error) {
 	l := logger.FromCtx(ctx)
-	exists, err := uc.userRepo.CheckUserExists(ctx, req.UserID)
+	exists, err := uc.userRepo.CheckUserExists(ctx, userID)
 	if err != nil {
 		l.Warn("failed to check user existence", zap.Error(err))
 		return nil, err
@@ -40,13 +39,13 @@ func (uc *UseCase) SetIsActive(ctx context.Context, req *entity.SetUserActiveReq
 		return nil, entity.ErrNotFound
 	}
 
-	err = uc.userRepo.SetIsActive(ctx, req.UserID, req.IsActive)
+	err = uc.userRepo.SetIsActive(ctx, userID, isActive)
 	if err != nil {
 		l.Warn("failed to set user active status", zap.Error(err))
 		return nil, err
 	}
 
-	updatedUser, err := uc.userRepo.GetUserByID(ctx, req.UserID)
+	updatedUser, err := uc.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
 		l.Warn("failed to get updated user", zap.Error(err))
 		return nil, err
