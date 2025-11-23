@@ -1,15 +1,10 @@
 package usecase
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
 	"context"
 
-	"github.com/avito-tech/go-transaction-manager/trm/v2/manager"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
 )
-
-type TransactionManager interface {
-	manager.Manager
-}
 
 type TeamRepository interface {
 	CheckTeamNameExists(ctx context.Context, name string) (bool, error)

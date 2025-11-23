@@ -9,9 +9,10 @@ const (
 	ErrorCodeNotAssigned ErrorCode = "NOT_ASSIGNED"
 	ErrorCodeNoCandidate ErrorCode = "NO_CANDIDATE"
 	ErrorCodeNotFound    ErrorCode = "NOT_FOUND"
+	ErrorCodeInternal    ErrorCode = "INTERNAL"
 
-	ErrorCodeInternal     ErrorCode = "INTERNAL"
 	ErrorCodeInvalidInput ErrorCode = "INVALID_INPUT"
+	ErrorCodeNotSameTeam  ErrorCode = "NOT_SAME_TEAM"
 )
 
 type APIError struct {

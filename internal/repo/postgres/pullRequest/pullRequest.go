@@ -1,10 +1,11 @@
 package pullRequest
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
 	"context"
 	"errors"
-	"fmt"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
 
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/jackc/pgerrcode"
@@ -90,11 +91,10 @@ const (
 type Repo struct {
 	db     *pgxpool.Pool
 	getter *trmpgx.CtxGetter
-	logger *zap.Logger
 }
 
-func NewRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter, logger *zap.Logger) *Repo {
-	return &Repo{db: db, getter: getter, logger: logger}
+func NewRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter) *Repo {
+	return &Repo{db: db, getter: getter}
 }
 
 func (r *Repo) CheckPullRequestIDExists(ctx context.Context, id string) (bool, error) {
@@ -126,6 +126,7 @@ func (r *Repo) Create(ctx context.Context, pr *entity.PullRequest) error {
 
 func (r *Repo) AssignReviewers(ctx context.Context, prID string, reviewerIDs []string) error {
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
+	l := logger.FromCtx(ctx)
 
 	batch := pgx.Batch{}
 	for _, reviewerID := range reviewerIDs {
@@ -136,7 +137,7 @@ func (r *Repo) AssignReviewers(ctx context.Context, prID string, reviewerIDs []s
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			fmt.Printf("error closing batch results: %v\n", err)
+			l.Error("error closing batch results: %v\n", zap.Error(err))
 		}
 	}(br)
 
@@ -168,9 +169,6 @@ func (r *Repo) GetReviewersByPullRequestID(ctx context.Context, id string) ([]st
 
 	rows, err := conn.Query(ctx, getReviewersByPullRequestIDQuery, id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -194,9 +192,6 @@ func (r *Repo) GetPullRequestsByReviewerID(ctx context.Context, userID string) (
 
 	rows, err := conn.Query(ctx, getPullRequestsByReviewerIDQuery, userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []*entity.PullRequest{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -205,7 +200,7 @@ func (r *Repo) GetPullRequestsByReviewerID(ctx context.Context, userID string) (
 
 	for rows.Next() {
 		pr := &entity.PullRequest{}
-		err := rows.Scan(&pr.ID, &pr.Name, &pr.AuthorID, &pr.Status, &pr.MergedAt)
+		err = rows.Scan(&pr.ID, &pr.Name, &pr.AuthorID, &pr.Status, &pr.MergedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +268,7 @@ func (r *Repo) GetOpenAndMergedReviewStatisticsForUsers(ctx context.Context) (ma
 		var userID string
 		var openCount, mergedCount int
 
-		if err := rows.Scan(&userID, &openCount, &mergedCount); err != nil {
+		if err = rows.Scan(&userID, &openCount, &mergedCount); err != nil {
 			return nil, nil, err
 		}
 
@@ -295,9 +290,6 @@ func (r *Repo) GetAuthorStatisticsForUsers(ctx context.Context) (map[string]int,
 
 	rows, err := conn.Query(ctx, getAuthorStatisticsQuery)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return authorMap, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -306,7 +298,7 @@ func (r *Repo) GetAuthorStatisticsForUsers(ctx context.Context) (map[string]int,
 		var authorID string
 		var authoredCount int
 
-		if err := rows.Scan(&authorID, &authoredCount); err != nil {
+		if err = rows.Scan(&authorID, &authoredCount); err != nil {
 			return nil, err
 		}
 		authorMap[authorID] = authoredCount
@@ -324,9 +316,6 @@ func (r *Repo) GetReviewsByReviewerIDs(ctx context.Context, reviewerIDs []string
 
 	rows, err := conn.Query(ctx, getReviewsByReviewerIDsQuery, reviewerIDs)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []*entity.ReviewRecord{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -335,7 +324,7 @@ func (r *Repo) GetReviewsByReviewerIDs(ctx context.Context, reviewerIDs []string
 
 	for rows.Next() {
 		record := &entity.ReviewRecord{}
-		if err := rows.Scan(&record.PullRequestID, &record.ReviewerID); err != nil {
+		if err = rows.Scan(&record.PullRequestID, &record.ReviewerID); err != nil {
 			return nil, err
 		}
 		records = append(records, record)
@@ -353,9 +342,6 @@ func (r *Repo) GetReviewersByPullRequestIDs(ctx context.Context, prIDs []string)
 
 	rows, err := conn.Query(ctx, getReviewersByPullRequestIDsQuery, prIDs)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return map[string][]string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -365,7 +351,7 @@ func (r *Repo) GetReviewersByPullRequestIDs(ctx context.Context, prIDs []string)
 	for rows.Next() {
 		var prID string
 		var reviewerID string
-		if err := rows.Scan(&prID, &reviewerID); err != nil {
+		if err = rows.Scan(&prID, &reviewerID); err != nil {
 			return nil, err
 		}
 		result[prID] = append(result[prID], reviewerID)
@@ -382,6 +368,7 @@ func (r *Repo) RemoveReviewersBatch(ctx context.Context, records []*entity.Revie
 	if len(records) == 0 {
 		return nil
 	}
+	l := logger.FromCtx(ctx)
 
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
@@ -394,7 +381,7 @@ func (r *Repo) RemoveReviewersBatch(ctx context.Context, records []*entity.Revie
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			fmt.Printf("error closing batch results: %v\n", err)
+			l.Error("error closing batch results: %v\n", zap.Error(err))
 		}
 	}(br)
 
@@ -416,6 +403,7 @@ func (r *Repo) AddReviewersBatch(ctx context.Context, records []*entity.ReviewRe
 	if len(records) == 0 {
 		return nil
 	}
+	l := logger.FromCtx(ctx)
 
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
@@ -428,7 +416,7 @@ func (r *Repo) AddReviewersBatch(ctx context.Context, records []*entity.ReviewRe
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			fmt.Printf("error closing batch results: %v\n", err)
+			l.Error("error closing batch results: %v\n", zap.Error(err))
 		}
 	}(br)
 

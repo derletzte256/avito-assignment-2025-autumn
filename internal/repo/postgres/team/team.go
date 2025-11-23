@@ -1,16 +1,16 @@
 package team
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
 	"context"
 	"errors"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
 
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 const (
@@ -33,11 +33,10 @@ const (
 type Repo struct {
 	db     *pgxpool.Pool
 	getter *trmpgx.CtxGetter
-	logger *zap.Logger
 }
 
-func NewTeamRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter, logger *zap.Logger) *Repo {
-	return &Repo{db: db, getter: getter, logger: logger}
+func NewTeamRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter) *Repo {
+	return &Repo{db: db, getter: getter}
 }
 
 func (r *Repo) CheckTeamNameExists(ctx context.Context, name string) (bool, error) {

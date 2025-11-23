@@ -1,10 +1,11 @@
 package user
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
 	"context"
 	"errors"
-	"fmt"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
 
 	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/jackc/pgx/v5"
@@ -81,11 +82,10 @@ const (
 type Repo struct {
 	db     *pgxpool.Pool
 	getter *trmpgx.CtxGetter
-	logger *zap.Logger
 }
 
-func NewUserRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter, logger *zap.Logger) *Repo {
-	return &Repo{db: db, getter: getter, logger: logger}
+func NewUserRepo(db *pgxpool.Pool, getter *trmpgx.CtxGetter) *Repo {
+	return &Repo{db: db, getter: getter}
 }
 
 func (r *Repo) CheckUserExists(ctx context.Context, id string) (bool, error) {
@@ -102,6 +102,7 @@ func (r *Repo) CheckUserExists(ctx context.Context, id string) (bool, error) {
 }
 
 func (r *Repo) CreateBatch(ctx context.Context, members []*entity.Member, teamName string) error {
+	l := logger.FromCtx(ctx)
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
 	batch := pgx.Batch{}
@@ -113,7 +114,7 @@ func (r *Repo) CreateBatch(ctx context.Context, members []*entity.Member, teamNa
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			fmt.Printf("error closing batch results: %v\n", err)
+			l.Error("error closing batch results: %v\n", zap.Error(err))
 		}
 	}(br)
 
@@ -132,9 +133,6 @@ func (r *Repo) GetByTeamName(ctx context.Context, teamName string) ([]*entity.Me
 
 	rows, err := conn.Query(ctx, getMembersByTeamNameQuery, teamName)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []*entity.Member{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -143,7 +141,7 @@ func (r *Repo) GetByTeamName(ctx context.Context, teamName string) ([]*entity.Me
 
 	for rows.Next() {
 		member := &entity.Member{}
-		err := rows.Scan(&member.ID, &member.Username, &member.IsActive)
+		err = rows.Scan(&member.ID, &member.Username, &member.IsActive)
 		if err != nil {
 			return nil, err
 		}
@@ -162,9 +160,6 @@ func (r *Repo) FindExistingByIDs(ctx context.Context, ids []string) (map[string]
 
 	rows, err := conn.Query(ctx, findExistingByIDsQuery, ids)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return map[string]struct{}{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -172,7 +167,7 @@ func (r *Repo) FindExistingByIDs(ctx context.Context, ids []string) (map[string]
 	existingIDs := make(map[string]struct{})
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err = rows.Scan(&id); err != nil {
 			return nil, err
 		}
 		existingIDs[id] = struct{}{}
@@ -186,6 +181,7 @@ func (r *Repo) FindExistingByIDs(ctx context.Context, ids []string) (map[string]
 }
 
 func (r *Repo) UpdateMembers(ctx context.Context, members []*entity.Member, teamName string) error {
+	l := logger.FromCtx(ctx)
 	conn := r.getter.DefaultTrOrDB(ctx, r.db)
 
 	batch := pgx.Batch{}
@@ -197,14 +193,18 @@ func (r *Repo) UpdateMembers(ctx context.Context, members []*entity.Member, team
 	defer func(br pgx.BatchResults) {
 		err := br.Close()
 		if err != nil {
-			fmt.Printf("error closing batch results: %v\n", err)
+			l.Error("error closing batch results: %v\n", zap.Error(err))
 		}
 	}(br)
 
 	for range members {
-		_, err := br.Exec()
+		result, err := br.Exec()
 		if err != nil {
 			return err
+		}
+
+		if result.RowsAffected() == 0 {
+			return entity.ErrNotFound
 		}
 	}
 
@@ -243,9 +243,6 @@ func (r *Repo) GetReviewersForPullRequest(ctx context.Context, teamName, exclude
 
 	rows, err := conn.Query(ctx, getReviewersForPRQuery, teamName, excludeUserID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []*entity.User{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -254,7 +251,7 @@ func (r *Repo) GetReviewersForPullRequest(ctx context.Context, teamName, exclude
 
 	for rows.Next() {
 		user := &entity.User{}
-		err := rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName)
+		err = rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName)
 		if err != nil {
 			return nil, err
 		}
@@ -288,9 +285,6 @@ func (r *Repo) GetAllUsersIDs(ctx context.Context) ([]string, error) {
 
 	rows, err := conn.Query(ctx, getAllUsersIDsQuery)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -299,7 +293,7 @@ func (r *Repo) GetAllUsersIDs(ctx context.Context) ([]string, error) {
 
 	for rows.Next() {
 		var id string
-		err := rows.Scan(&id)
+		err = rows.Scan(&id)
 		if err != nil {
 			return nil, err
 		}
@@ -318,9 +312,6 @@ func (r *Repo) GetUsersByIDs(ctx context.Context, ids []string) ([]*entity.User,
 
 	rows, err := conn.Query(ctx, getUsersByIDsQuery, ids)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []*entity.User{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -329,7 +320,7 @@ func (r *Repo) GetUsersByIDs(ctx context.Context, ids []string) ([]*entity.User,
 
 	for rows.Next() {
 		user := &entity.User{}
-		if err := rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName); err != nil {
+		if err = rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
@@ -347,9 +338,6 @@ func (r *Repo) GetActiveUsersIDsByTeamName(ctx context.Context, teamName string,
 
 	rows, err := conn.Query(ctx, getActiveUsersIDsByTeamNameQuery, teamName, excludeIDs)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return []string{}, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -358,7 +346,7 @@ func (r *Repo) GetActiveUsersIDsByTeamName(ctx context.Context, teamName string,
 
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err = rows.Scan(&id); err != nil {
 			return nil, err
 		}
 		ids = append(ids, id)

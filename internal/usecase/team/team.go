@@ -1,9 +1,11 @@
 package team
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
-	"avito-assignment-2025-autumn/internal/usecase"
 	"context"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
 
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
 	"go.uber.org/zap"
@@ -13,15 +15,13 @@ type UseCase struct {
 	teamRepo   usecase.TeamRepository
 	userRepo   usecase.UserRepository
 	transactor trm.Manager
-	logger     *zap.Logger
 }
 
-func NewUseCase(teamRepo usecase.TeamRepository, userRepo usecase.UserRepository, transactor trm.Manager, logger *zap.Logger) *UseCase {
+func NewUseCase(teamRepo usecase.TeamRepository, userRepo usecase.UserRepository, transactor trm.Manager) *UseCase {
 	return &UseCase{
 		teamRepo:   teamRepo,
 		userRepo:   userRepo,
 		transactor: transactor,
-		logger:     logger,
 	}
 }
 
@@ -39,6 +39,7 @@ func checkMemberIDsUnique(members []*entity.Member) bool {
 }
 
 func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
+	l := logger.FromCtx(ctx)
 	if !checkMemberIDsUnique(team.Members) {
 		return entity.ErrDuplicateUserIDs
 	}
@@ -46,15 +47,19 @@ func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
 	err := uc.transactor.Do(ctx, func(ctx context.Context) error {
 		exists, err := uc.teamRepo.CheckTeamNameExists(ctx, team.Name)
 		if err != nil {
-			uc.logger.Warn("failed to check team existence", zap.Error(err))
+			l.Warn("failed to check team existence", zap.Error(err))
 			return err
 		}
 		if exists {
 			return entity.ErrAlreadyExists
 		}
 
-		if err := uc.teamRepo.Create(ctx, team); err != nil {
+		if err = uc.teamRepo.Create(ctx, team); err != nil {
 			return err
+		}
+
+		if len(team.Members) == 0 {
+			return nil
 		}
 
 		ids := make([]string, 0, len(team.Members))
@@ -66,7 +71,7 @@ func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
 
 		existingIDs, err := uc.userRepo.FindExistingByIDs(ctx, ids)
 		if err != nil {
-			uc.logger.Warn("failed to find existing user IDs", zap.Error(err))
+			l.Warn("failed to find existing user IDs", zap.Error(err))
 			return err
 		}
 
@@ -74,7 +79,7 @@ func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
 		newMembers := make([]*entity.Member, 0)
 		for _, member := range team.Members {
 			if member != nil {
-				if _, exists := existingIDs[member.ID]; exists {
+				if _, exists = existingIDs[member.ID]; exists {
 					existingMembers = append(existingMembers, member)
 				} else {
 					newMembers = append(newMembers, member)
@@ -83,15 +88,15 @@ func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
 		}
 
 		if len(existingMembers) > 0 {
-			if err := uc.userRepo.UpdateMembers(ctx, existingMembers, team.Name); err != nil {
-				uc.logger.Warn("failed to update existing users", zap.Error(err))
+			if err = uc.userRepo.UpdateMembers(ctx, existingMembers, team.Name); err != nil {
+				l.Warn("failed to update existing users", zap.Error(err))
 				return err
 			}
 		}
 
 		if len(newMembers) > 0 {
-			if err := uc.userRepo.CreateBatch(ctx, newMembers, team.Name); err != nil {
-				uc.logger.Warn("failed to create new users", zap.Error(err))
+			if err = uc.userRepo.CreateBatch(ctx, newMembers, team.Name); err != nil {
+				l.Warn("failed to create new users", zap.Error(err))
 				return err
 			}
 		}
@@ -106,15 +111,16 @@ func (uc *UseCase) CreateTeam(ctx context.Context, team *entity.Team) error {
 }
 
 func (uc *UseCase) GetByName(ctx context.Context, name string) (*entity.Team, error) {
+	l := logger.FromCtx(ctx)
 	team, err := uc.teamRepo.GetByName(ctx, name)
 	if err != nil {
-		uc.logger.Warn("failed to get team", zap.Error(err))
+		l.Warn("failed to get team", zap.Error(err))
 		return nil, err
 	}
 
 	members, err := uc.userRepo.GetByTeamName(ctx, team.Name)
 	if err != nil {
-		uc.logger.Warn("failed to get team members", zap.Error(err))
+		l.Warn("failed to get team members", zap.Error(err))
 		return nil, err
 	}
 

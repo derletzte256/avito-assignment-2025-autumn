@@ -1,10 +1,11 @@
 package httputil
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
 	"bytes"
 	"encoding/json"
 	"net/http"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
 )
 
 func WriteJSON(w http.ResponseWriter, status int, payload interface{}) error {

@@ -1,10 +1,11 @@
 package http
 
 import (
-	"avito-assignment-2025-autumn/internal/config"
 	"context"
 	"errors"
 	nethttp "net/http"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/config"
 
 	"go.uber.org/zap"
 )

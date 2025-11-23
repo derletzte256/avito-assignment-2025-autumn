@@ -1,10 +1,12 @@
 package pullRequest
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
-	"avito-assignment-2025-autumn/internal/usecase"
 	"context"
 	"errors"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/usecase"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
 
 	"github.com/avito-tech/go-transaction-manager/trm/v2"
 	"go.uber.org/zap"
@@ -15,24 +17,23 @@ type UseCase struct {
 	userRepo        usecase.UserRepository
 	teamRepo        usecase.TeamRepository
 	transactor      trm.Manager
-	logger          *zap.Logger
 }
 
-func NewUseCase(pullRequestRepo usecase.PullRequestRepository, userRepo usecase.UserRepository, teamRepo usecase.TeamRepository, transactor trm.Manager, logger *zap.Logger) *UseCase {
+func NewUseCase(pullRequestRepo usecase.PullRequestRepository, userRepo usecase.UserRepository, teamRepo usecase.TeamRepository, transactor trm.Manager) *UseCase {
 	return &UseCase{
 		pullRequestRepo: pullRequestRepo,
 		teamRepo:        teamRepo,
 		userRepo:        userRepo,
 		transactor:      transactor,
-		logger:          logger,
 	}
 }
 
 func (uc *UseCase) CreatePullRequest(ctx context.Context, pr *entity.CreatePullRequestRequest) (*entity.PullRequest, error) {
+	l := logger.FromCtx(ctx)
 	err := uc.transactor.Do(ctx, func(ctx context.Context) error {
 		exists, err := uc.pullRequestRepo.CheckPullRequestIDExists(ctx, pr.PullRequestID)
 		if err != nil {
-			uc.logger.Warn("failed to check if PR exists", zap.Error(err))
+			l.Warn("failed to check if PR exists", zap.Error(err))
 			return err
 		}
 		if exists {
@@ -41,13 +42,13 @@ func (uc *UseCase) CreatePullRequest(ctx context.Context, pr *entity.CreatePullR
 
 		author, err := uc.userRepo.GetUserByID(ctx, pr.AuthorID)
 		if err != nil {
-			uc.logger.Warn("failed to get author by ID", zap.Error(err))
+			l.Warn("failed to get author by ID", zap.Error(err))
 			return err
 		}
 
 		reviewers, err := uc.userRepo.GetReviewersForPullRequest(ctx, author.TeamName, author.ID)
 		if err != nil {
-			uc.logger.Warn("failed to get reviewers by ID", zap.Error(err))
+			l.Warn("failed to get reviewers by ID", zap.Error(err))
 			return err
 		}
 
@@ -64,13 +65,13 @@ func (uc *UseCase) CreatePullRequest(ctx context.Context, pr *entity.CreatePullR
 		}
 
 		if err = uc.pullRequestRepo.Create(ctx, newPR); err != nil {
-			uc.logger.Warn("failed to create pull request", zap.Error(err))
+			l.Warn("failed to create pull request", zap.Error(err))
 			return err
 		}
 
 		if len(reviewersIDs) > 0 {
 			if err = uc.pullRequestRepo.AssignReviewers(ctx, pr.PullRequestID, reviewersIDs); err != nil {
-				uc.logger.Warn("failed to assign reviewers", zap.Error(err))
+				l.Warn("failed to assign reviewers", zap.Error(err))
 				return err
 			}
 		}
@@ -79,19 +80,19 @@ func (uc *UseCase) CreatePullRequest(ctx context.Context, pr *entity.CreatePullR
 	})
 
 	if err != nil {
-		uc.logger.Warn("failed to create pull request", zap.Error(err))
+		l.Warn("failed to create pull request", zap.Error(err))
 		return nil, err
 	}
 
 	createdPR, err := uc.pullRequestRepo.GetPullRequestByID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get pull request", zap.Error(err))
+		l.Warn("failed to get pull request", zap.Error(err))
 		return nil, err
 	}
 
 	createdReviewers, err := uc.pullRequestRepo.GetReviewersByPullRequestID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get reviewers for pull request", zap.Error(err))
+		l.Warn("failed to get reviewers for pull request", zap.Error(err))
 		return nil, err
 	}
 	createdPR.Reviewers = createdReviewers
@@ -100,9 +101,10 @@ func (uc *UseCase) CreatePullRequest(ctx context.Context, pr *entity.CreatePullR
 }
 
 func (uc *UseCase) MergePullRequest(ctx context.Context, pr *entity.MergePullRequestRequest) (*entity.PullRequest, error) {
+	l := logger.FromCtx(ctx)
 	exists, err := uc.pullRequestRepo.CheckPullRequestIDExists(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to check if PR exists", zap.Error(err))
+		l.Warn("failed to check if PR exists", zap.Error(err))
 		return nil, err
 	}
 
@@ -112,19 +114,19 @@ func (uc *UseCase) MergePullRequest(ctx context.Context, pr *entity.MergePullReq
 
 	err = uc.pullRequestRepo.MergePullRequestByID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to merge pull request", zap.Error(err))
+		l.Warn("failed to merge pull request", zap.Error(err))
 		return nil, err
 	}
 
 	mergedPR, err := uc.pullRequestRepo.GetPullRequestByID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get merged pull request", zap.Error(err))
+		l.Warn("failed to get merged pull request", zap.Error(err))
 		return nil, err
 	}
 
 	mergedReviewers, err := uc.pullRequestRepo.GetReviewersByPullRequestID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get reviewers for merged pull request", zap.Error(err))
+		l.Warn("failed to get reviewers for merged pull request", zap.Error(err))
 		return nil, err
 	}
 	mergedPR.Reviewers = mergedReviewers
@@ -133,11 +135,12 @@ func (uc *UseCase) MergePullRequest(ctx context.Context, pr *entity.MergePullReq
 }
 
 func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignPullRequestRequest) (*entity.ReassignPullRequestResponse, error) {
+	l := logger.FromCtx(ctx)
 	var replacedBy string
 	err := uc.transactor.Do(ctx, func(ctx context.Context) error {
 		pullRequest, err := uc.pullRequestRepo.GetPullRequestByID(ctx, pr.PullRequestID)
 		if err != nil {
-			uc.logger.Warn("failed to get pull request", zap.Error(err))
+			l.Warn("failed to get pull request", zap.Error(err))
 			return err
 		}
 
@@ -147,13 +150,13 @@ func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignP
 
 		oldUser, err := uc.userRepo.GetUserByID(ctx, pr.OldUserID)
 		if err != nil {
-			uc.logger.Warn("failed to get old user", zap.Error(err))
+			l.Warn("failed to get old user", zap.Error(err))
 			return err
 		}
 
 		reviewers, err := uc.pullRequestRepo.GetReviewersByPullRequestID(ctx, pr.PullRequestID)
 		if err != nil {
-			uc.logger.Warn("failed to get reviewers for pull request", zap.Error(err))
+			l.Warn("failed to get reviewers for pull request", zap.Error(err))
 			return err
 		}
 		var isOldUserReviewer bool
@@ -169,9 +172,7 @@ func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignP
 		}
 
 		excludedIDs := make([]string, 0)
-		for _, reviewer := range reviewers {
-			excludedIDs = append(excludedIDs, reviewer)
-		}
+		excludedIDs = append(excludedIDs, reviewers...)
 		excludedIDs = append(excludedIDs, pullRequest.AuthorID)
 
 		newReviewer, err := uc.userRepo.GetReplacementReviewerForPullRequest(ctx, oldUser.TeamName, excludedIDs)
@@ -179,7 +180,7 @@ func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignP
 			if errors.Is(err, entity.ErrNotFound) {
 				return entity.ErrNoCandidate
 			}
-			uc.logger.Warn("failed to get new reviewer", zap.Error(err))
+			l.Warn("failed to get new reviewer", zap.Error(err))
 			return err
 		}
 
@@ -187,13 +188,13 @@ func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignP
 
 		err = uc.pullRequestRepo.RemoveReviewer(ctx, pr.PullRequestID, oldUser.ID)
 		if err != nil {
-			uc.logger.Warn("failed to remove old reviewer", zap.Error(err))
+			l.Warn("failed to remove old reviewer", zap.Error(err))
 			return err
 		}
 
 		err = uc.pullRequestRepo.AddNewReviewer(ctx, pr.PullRequestID, newReviewer.ID)
 		if err != nil {
-			uc.logger.Warn("failed to assign new reviewer", zap.Error(err))
+			l.Warn("failed to assign new reviewer", zap.Error(err))
 			return err
 		}
 		return nil
@@ -205,13 +206,13 @@ func (uc *UseCase) ReassignPullRequest(ctx context.Context, pr *entity.ReassignP
 
 	updatedPR, err := uc.pullRequestRepo.GetPullRequestByID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get updated pull request", zap.Error(err))
+		l.Warn("failed to get updated pull request", zap.Error(err))
 		return nil, err
 	}
 
 	updatedReviewers, err := uc.pullRequestRepo.GetReviewersByPullRequestID(ctx, pr.PullRequestID)
 	if err != nil {
-		uc.logger.Warn("failed to get reviewers for updated pull request", zap.Error(err))
+		l.Warn("failed to get reviewers for updated pull request", zap.Error(err))
 		return nil, err
 	}
 	updatedPR.Reviewers = updatedReviewers

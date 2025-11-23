@@ -1,4 +1,3 @@
-# .golangci.yml
 version: "2"
 
 run:
@@ -8,13 +7,14 @@ run:
   relative-path-mode: gomod
 
 linters:
-  # Use the standard default set, then explicitly ensure a few core ones.
   default: standard
   enable:
     - govet
     - staticcheck
     - errcheck
     - revive
+    - ineffassign
+    - goconst
   settings:
     govet:
       enable:
@@ -23,21 +23,18 @@ linters:
       severity: warning
 
 formatters:
-  # v2: formatters live here, not in linters.enable
   enable:
     - goimports
+    - gofmt
   settings:
     goimports:
-      # Replace with your module path(s)
       local-prefixes:
-        - your/module/path
+        - avito-assignment-2025-autumn
+
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-
-output:
-  show-linter-name: true
 
 severity:
   default: error

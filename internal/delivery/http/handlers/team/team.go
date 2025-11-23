@@ -1,44 +1,47 @@
 package team
 
 import (
-	"avito-assignment-2025-autumn/internal/entity"
-	"avito-assignment-2025-autumn/pkg/httputil"
 	"context"
 	"errors"
 	"net/http"
+
+	"github.com/derletzte256/avito-assignment-2025-autumn/internal/entity"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/httputil"
+	"github.com/derletzte256/avito-assignment-2025-autumn/pkg/logger"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
-type TeamUseCase interface {
+type UseCase interface {
 	CreateTeam(ctx context.Context, team *entity.Team) error
 	GetByName(ctx context.Context, name string) (*entity.Team, error)
 }
 
 type Delivery struct {
-	uc     TeamUseCase
-	logger *zap.Logger
+	uc UseCase
 }
 
-func NewTeamDelivery(uc TeamUseCase, logger *zap.Logger) *Delivery {
-	return &Delivery{uc: uc, logger: logger}
+func NewTeamDelivery(uc UseCase) *Delivery {
+	return &Delivery{uc: uc}
 }
 
 func (d *Delivery) RegisterRoutes(r *mux.Router) {
-	r.HandleFunc("/add", d.CreateTeam).Methods(http.MethodPost)
-	r.HandleFunc("/get", d.GetTeam).Methods(http.MethodGet)
+	s := r.PathPrefix("/team").Subrouter()
+	s.HandleFunc("/add", d.CreateTeam).Methods(http.MethodPost)
+	s.HandleFunc("/get", d.GetTeam).Methods(http.MethodGet)
 }
 
 func (d *Delivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	var in entity.CreateTeamRequest
 	ctx := r.Context()
+	l := logger.FromCtx(ctx)
 
 	if err := httputil.ReadJSON(r, &in); err != nil {
-		d.logger.Warn("failed to read request", zap.Error(err))
+		l.Warn("failed to read request", zap.Error(err))
 		if httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "invalid JSON body") != nil {
-			d.logger.Warn("failed to read request", zap.Error(err))
+			l.Error("failed to read request", zap.Error(err))
 			return
 		}
 		return
@@ -49,12 +52,12 @@ func (d *Delivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		var errValid validator.ValidationErrors
 		ok := errors.As(err, &errValid)
 		if !ok {
-			d.logger.Error("validation error is not of type ValidationErrors", zap.Error(err))
+			l.Error("validation error is not of type ValidationErrors", zap.Error(err))
 			httputil.WriteInternalServerError(w, err)
 			return
 		}
 		if writeErr := httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "validation error: "+errValid.Error()); writeErr != nil {
-			d.logger.Warn("failed to write error", zap.Error(writeErr))
+			l.Error("failed to write error", zap.Error(writeErr))
 			return
 		}
 		return
@@ -66,17 +69,17 @@ func (d *Delivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, entity.ErrAlreadyExists):
 			if writeErr := httputil.WriteAPIError(w, http.StatusConflict, entity.ErrorCodeTeamExists, "team_name already exists"); writeErr != nil {
-				d.logger.Warn("failed to write error", zap.Error(writeErr))
+				l.Error("failed to write error", zap.Error(writeErr))
 				return
 			}
 		case errors.Is(err, entity.ErrDuplicateUserIDs):
 			if writeErr := httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "duplicate user IDs in members"); writeErr != nil {
-				d.logger.Warn("failed to write error", zap.Error(writeErr))
+				l.Error("failed to write error", zap.Error(writeErr))
 				return
 			}
 		case errors.Is(err, entity.ErrNotFound):
 			if writeErr := httputil.WriteAPIError(w, http.StatusNotFound, entity.ErrorCodeNotFound, "one or more members not found"); writeErr != nil {
-				d.logger.Warn("failed to write error", zap.Error(writeErr))
+				l.Error("failed to write error", zap.Error(writeErr))
 				return
 			}
 		default:
@@ -87,7 +90,7 @@ func (d *Delivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
 
 	resp := entity.CreateTeamResponse{Team: team}
 	if err := httputil.WriteJSON(w, http.StatusCreated, resp); err != nil {
-		d.logger.Warn("failed to write response", zap.Error(err))
+		l.Warn("failed to write response", zap.Error(err))
 		httputil.WriteInternalServerError(w, err)
 		return
 	}
@@ -96,10 +99,11 @@ func (d *Delivery) CreateTeam(w http.ResponseWriter, r *http.Request) {
 
 func (d *Delivery) GetTeam(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	l := logger.FromCtx(ctx)
 	teamName := r.URL.Query().Get("team_name")
 	if teamName == "" {
 		if writeErr := httputil.WriteAPIError(w, http.StatusBadRequest, entity.ErrorCodeInvalidInput, "team_name is required"); writeErr != nil {
-			d.logger.Warn("failed to write error", zap.Error(writeErr))
+			l.Error("failed to write error", zap.Error(writeErr))
 			return
 		}
 		return
@@ -109,7 +113,7 @@ func (d *Delivery) GetTeam(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, entity.ErrNotFound) {
 			if writeErr := httputil.WriteAPIError(w, http.StatusNotFound, entity.ErrorCodeNotFound, "team not found"); writeErr != nil {
-				d.logger.Warn("failed to write error", zap.Error(writeErr))
+				l.Error("failed to write error", zap.Error(writeErr))
 				return
 			}
 			return
@@ -119,8 +123,8 @@ func (d *Delivery) GetTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := httputil.WriteJSON(w, http.StatusOK, team); err != nil {
-		d.logger.Warn("failed to write response", zap.Error(err))
+	if err = httputil.WriteJSON(w, http.StatusOK, team); err != nil {
+		l.Error("failed to write response", zap.Error(err))
 		httputil.WriteInternalServerError(w, err)
 		return
 	}
